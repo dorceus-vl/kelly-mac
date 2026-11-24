@@ -20,12 +20,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/ui"
 cp atticus.py "$APP/Contents/Resources/"
 cp ui/*.html ui/*.js ui/*.css "$APP/Contents/Resources/ui/"
 cp ui/AppIcon.icns "$APP/Contents/Resources/"
+# Kelly: her icon from the private Kelly-App checkout when it sits next to this one (not committed here)
+[ ! -f ../Kelly-App/src-tauri/icons/icon.icns ] || cp ../Kelly-App/src-tauri/icons/icon.icns "$APP/Contents/Resources/AppIcon.icns"
 cat > "$APP/Contents/Info.plist" <<P
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.atticus.app</string>
-<key>CFBundleName</key><string>Atticus</string>
+<key>CFBundleIdentifier</key><string>com.knocturnlabs.kelly</string>
+<key>CFBundleName</key><string>Kelly</string>
 <key>CFBundleExecutable</key><string>Atticus</string>
 <key>CFBundleVersion</key><string>$BUILD</string>
 <key>CFBundleShortVersionString</key><string>$VERSION</string>
@@ -41,20 +43,20 @@ cat > "$APP/Contents/Info.plist" <<P
 </dict></plist>
 P
 mv "$STAGE/Atticus" "$APP/Contents/MacOS/Atticus"
-# With a code-signing identity named "Atticus Local Signing" in the keychain, macOS keeps permissions across
+# With a code-signing identity named "Kelly Local Signing" in the keychain, macOS keeps permissions across
 # rebuilds and auto-updates; ad hoc signing would ask for every permission again after each one. So make it once.
-ID=$(security find-identity -p codesigning | awk '/Atticus Local Signing/{print $2; exit}')
+ID=$(security find-identity -p codesigning | awk '/Kelly Local Signing/{print $2; exit}')
 if [ -z "$ID" ]; then
   K=$(mktemp -d)
-  /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -subj "/CN=Atticus Local Signing" -addext "extendedKeyUsage=critical,codeSigning" \
+  /usr/bin/openssl req -x509 -newkey rsa:2048 -nodes -days 7300 -subj "/CN=Kelly Local Signing" -addext "extendedKeyUsage=critical,codeSigning" \
     -addext "keyUsage=critical,digitalSignature" -keyout "$K/k.pem" -out "$K/c.pem" 2>/dev/null &&
   /usr/bin/openssl pkcs12 -export -inkey "$K/k.pem" -in "$K/c.pem" -out "$K/a.p12" -passout pass:atticus 2>/dev/null &&
   security import "$K/a.p12" -P atticus -T /usr/bin/codesign >/dev/null 2>&1 || true   # fails quietly: ad hoc still works
   rm -rf "$K"
-  ID=$(security find-identity -p codesigning | awk '/Atticus Local Signing/{print $2; exit}')
+  ID=$(security find-identity -p codesigning | awk '/Kelly Local Signing/{print $2; exit}')
 fi
 codesign -s "${ID:--}" --force "$APP"
-DEST=~/Applications/Atticus.app
+DEST=~/Applications/KellyVoice.app   # Kelly: not Kelly.app, which is the Tauri app in /Applications
 mkdir -p "$(dirname "$DEST")"
 [ ! -e "$DEST" ] || mv "$DEST" "$STAGE/previous.app"
 if ! mv "$APP" "$DEST"; then
@@ -64,13 +66,13 @@ fi
 APP="$DEST"
 # register with macOS, or System Settings can't list it for permissions
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"
-AGENT=~/Library/LaunchAgents/com.atticus.app.plist   # starts at login, restarts if it crashes (Quit stays quit)
+AGENT=~/Library/LaunchAgents/com.knocturnlabs.kelly.plist   # starts at login, restarts if it crashes (Quit stays quit)
 mkdir -p ~/Library/LaunchAgents ~/.config/atticus
 cat > "$AGENT" <<P
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>Label</key><string>com.atticus.app</string>
+<key>Label</key><string>com.knocturnlabs.kelly</string>
 <key>ProgramArguments</key><array><string>$APP/Contents/MacOS/Atticus</string></array>
 <key>RunAtLoad</key><true/>
 <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
@@ -79,11 +81,12 @@ cat > "$AGENT" <<P
 P
 [ -n "$ATTICUS_NO_RESTART" ] && exit 0   # the app's own updater restarts it when idle
 # Reload the job so launchd refreshes its executable signing requirement after a rebuild.
-launchctl bootout gui/$(id -u)/com.atticus.app 2>/dev/null || true
+launchctl bootout gui/$(id -u)/com.knocturnlabs.kelly 2>/dev/null || true
+launchctl bootout gui/$(id -u)/com.atticus.app 2>/dev/null || true   # Kelly: a stock Atticus must not hold the mic and hotkey too
 pkill -f "$APP/Contents/MacOS/Atticus$" 2>/dev/null && sleep 1   # stop a copy opened by hand too
 # bootout can return before the job has finished unloading.
 launchctl bootstrap gui/$(id -u) "$AGENT" 2>/dev/null || { sleep 1; launchctl bootstrap gui/$(id -u) "$AGENT" 2>/dev/null || {
   echo "Could not add Atticus to Login Items; opening it directly instead."
   open "$APP"
 }; }
-echo "Atticus is running. Hold Control+Option+Space and talk."
+echo "Kelly is running. Hold Option+K and talk; tap it to type."

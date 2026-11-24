@@ -2206,7 +2206,7 @@ class WatchAndBudgetTests(unittest.TestCase):
              patch('sys.stdout', new_callable=io.StringIO) as out:
             atticus.set_switch('key binding', 'off')
         ask.assert_not_called()
-        opened.assert_called_once_with(['open', '-a', 'Atticus'], capture_output=True)
+        opened.assert_called_once_with(['open', '-b', 'com.knocturnlabs.kelly'], capture_output=True)
         self.assertIn('Atticus Settings is open; change it there', out.getvalue())
         self.assertIn('Open Atticus Settings: open -a Atticus.', atticus.SYSTEM)
         swift = (Path(atticus.ME).parent / 'Atticus.swift').read_text()

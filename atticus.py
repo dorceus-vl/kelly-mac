@@ -46,7 +46,7 @@ GUMROAD_PRODUCT = ''   # Gumroad product ID (4o1C13Q132kPu-TW7b-sAA== when sales
 BUY = 'https://3370759087892.gumroad.com/l/atticus'
 KEY_FILE = os.path.join(DIR, 'license')
 # Anonymous counts, timings and error locations under a random install ID; never asks or screen content. Off in Settings → Privacy. Empty key = off.
-POSTHOG_KEY = os.environ.get('ATTICUS_POSTHOG_KEY', 'phc_mGpLLzJtYTToBF8uSkqkUxMMG9ANmQWKDBnpsRDmzy6P')   # public capture token; empty override disables
+POSTHOG_KEY = os.environ.get('ATTICUS_POSTHOG_KEY', '')   # public capture token; empty override disables
 APP_COMMIT = 'unknown'
 try:
     APP_VERSION = Path(ME).with_name('VERSION').read_text().strip()
@@ -571,7 +571,7 @@ APP = os.environ.get('ATTICUS_APP') or os.path.join(HOME, 'Applications/Atticus.
 def no_plugins():
     return {'CLAUDE_CODE_PLUGIN_CACHE_DIR': os.path.join(DIR, 'claude-plugins')}
 
-SYSTEM = f"""You are Atticus, a Mac helper in a small box. The user holds a hotkey, talks, then lets go.
+SYSTEM = f"""You are Kelly, a Mac helper in a small box. The user holds a hotkey, talks, then lets go.
 Stable facts: answer only if sure. Current facts: search once; prefer dated primary sources. Never invent. Batch independent work.
 Before tools: 3-8 plain words, no command names.
 Final: answer first; ≤3 short sentences, more if asked; verified tasks 1 sentence. Markdown OK; LaTeX math: $inline$, $$display$$.
@@ -1168,7 +1168,7 @@ def set_switch(words, on):
     on: on|off for a switch, or one of a choice setting's options."""
     stem = lambda t: {w[:3] for w in re.findall(r'[a-z]+', t.lower()) if w not in ('the', 'me', 'my', 'on', 'off', 'setting', 'in', 'a')}
     def unavailable(message='That setting is not available by voice. Atticus Settings is open; change it there.'):
-        subprocess.run(['open', '-a', 'Atticus'], capture_output=True)
+        subprocess.run(['open', '-b', 'com.knocturnlabs.kelly'], capture_output=True)
         print(message)
     if on not in ('on', 'off'):
         rows = picks()
@@ -4240,7 +4240,7 @@ def routine_fire(identifier, now=None):
     finally:
         lock.close()
     if not os.environ.get('ATTICUS_DIR'):
-        wake = subprocess.run(['/bin/launchctl', 'kickstart', f'gui/{os.getuid()}/com.atticus.app'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        wake = subprocess.run(['/bin/launchctl', 'kickstart', f'gui/{os.getuid()}/com.knocturnlabs.kelly'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if wake.returncode and subprocess.run(['/usr/bin/pgrep', '-f', APP], stdout=subprocess.DEVNULL).returncode:
             bundle = APP.partition('/Contents/MacOS/')[0]
             if bundle.endswith('.app'): subprocess.Popen(['/usr/bin/open', '-gj', bundle], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -4338,7 +4338,7 @@ def activate(key):
 
 
 def telemetry_enabled():
-    return bool(POSTHOG_KEY and pref('stats', True) and not os.environ.get('ATTICUS_DIR'))   # ATTICUS_DIR is the pure-test sandbox
+    return bool(POSTHOG_KEY and pref('stats', False) and not os.environ.get('ATTICUS_DIR'))   # ATTICUS_DIR is the pure-test sandbox
 
 
 def install_id():

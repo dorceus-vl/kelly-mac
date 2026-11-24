@@ -1,7 +1,7 @@
 // Atticus overlay: hold to talk and release to send, or press to start and press again to send.
 // A box in the top left (ui/ui.html, with the thinking-orbs orb) shows your words live (Apple on-device speech),
 // then Atticus's notes and steps while `atticus.py` works, then the answer. It never takes focus.
-// Build: ./build.sh. Kept running by ~/Library/LaunchAgents/com.atticus.app.plist
+// Build: ./build.sh. Kept running by ~/Library/LaunchAgents/com.knocturnlabs.kelly.plist
 import Cocoa
 import Carbon
 import AVFoundation
@@ -185,9 +185,9 @@ enum DictationData {
 // Settings, shared with atticus.py (model, screen, openOn, instant): ~/.config/atticus/settings.json
 enum Prefs {
     static let path = (ProcessInfo.processInfo.environment["ATTICUS_DIR"] ?? NSString(string: "~/.config/atticus").expandingTildeInPath) + "/settings.json"
-    static let defaults: [String: Any] = ["hotkeyCode": 49, "hotkeyMods": controlKey | optionKey, "hotkeyLabel": "⌃⌥Space", "login": true, "paused": false, "corner": "top-left", "linger": "normal",
+    static let defaults: [String: Any] = ["hotkeyCode": 40, "hotkeyMods": optionKey, "hotkeyLabel": "⌥K", "login": true, "paused": false, "corner": "top-left", "linger": "normal",
         "soundStart": "Pop", "soundRelease": "Bottle", "soundDone": "Glass", "soundStop": "Tink", "volume": 0.16, "client": "claude", "model": "haiku", "instant": true,
-        "wakeWord": false, "wakeWordName": "Atticus", "microphone": "automatic", "quietAudio": false, "quietLevel": 0.18, "agentModel": "sonnet", "drawModel": "sonnet", "agentUserTools": true, "fixSetup": false,
+        "wakeWord": false, "wakeWordName": "Kelly", "microphone": "automatic", "quietAudio": false, "quietLevel": 0.18, "agentModel": "sonnet", "drawModel": "sonnet", "agentUserTools": true, "fixSetup": false,
         "modelSuggestions": true,
         "meetingStyle": "Direct", "meetingCustom": "", "meetingStyles": [
             ["name": "Direct", "text": "Lead with the answer in plain words. No hedging or filler."],
@@ -196,7 +196,7 @@ enum Prefs {
             ["name": "Friendly", "text": "Warm and conversational, like talking to a colleague. Simple words."]],
         "selection": true, "ahead": true, "aheadDelay": 0.7, "live": true, "screen": "auto", "openOn": "here", "workIn": "back", "miniScreen": true, "draw": true, "guideSteps": "auto", "pageJS": false,
         "speak": true, "showAnswers": "stream", "autoCopy": false, "hideWhenSharing": true, "menuIcon": true, "autoUpdate": true,
-        "learn": true, "safe": true, "pointer": false, "meeting": false, "meetingSave": true, "meetingAuto": "sure", "meetingNudge": false, "meetingDetect": true, "learnMe": true, "saveChats": true, "stats": true, "tips": true, "support": true, "comeBack": true, "askMe": true, "meetingSummary": true, "typeRight": true, "talkMode": "hold", "uiLanguage": "auto", "speechModel": "speech", "whisperModel": "turbo", "whisperLanguage": "auto", "improve": false, "improveAsked": false, "draftInsert": "ask",
+        "learn": true, "safe": true, "pointer": false, "meeting": false, "meetingSave": true, "meetingAuto": "sure", "meetingNudge": false, "meetingDetect": true, "learnMe": true, "saveChats": true, "stats": false, "shortReply": true, "tips": true, "support": true, "comeBack": true, "askMe": true, "meetingSummary": true, "typeRight": true, "talkMode": "hold", "uiLanguage": "auto", "speechModel": "speech", "whisperModel": "turbo", "whisperLanguage": "auto", "improve": false, "improveAsked": false, "draftInsert": "ask",
         "dictateHotkeyCode": -1, "dictateHotkeyMods": 0, "dictateHotkeyLabel": "", "dictateMode": "cleanup", "dictateHistory": true, "dictateLearn": true, "dictateWords": [], "dictateFixes": [String: String](), "boxW": 500, "boxH": 420, "autoMinimize": true, "tinyFold": false,
         "voiceRate": 196]   // say's words a minute; its own 175 dragged through spoken steps
     static let retiredKeys = ["quietAudio", "quietLevel", "autoCopy", "askMe", "corner", "linger", "soundStart", "soundRelease", "soundDone", "soundStop",
@@ -742,6 +742,7 @@ func spoken(_ answer: String) -> String {
 // Cumulative, filtered answer text only; incomplete sentences wait for the next chunk.
 struct SpeechSentences {
     var consumed = 0, count = 0, capped = false
+    static var oneLine = false   // Kelly: short-reply mode, set from Prefs "shortReply"
     mutating func take(_ text: String, final: Bool = false) -> [String] {
         guard !capped, text.count >= consumed else { return [] }
         let tail = String(text.dropFirst(consumed))
@@ -757,7 +758,7 @@ struct SpeechSentences {
         consumed += final ? tail.count : tail.distance(from: tail.startIndex, to: last)
         var accepted: [String] = []
         for sentence in result where !sentence.isEmpty {
-            if count + sentence.count > 900 {
+            if count + sentence.count > 900 || (Self.oneLine && count > 0) {   // Kelly: short-reply mode speaks one line
                 capped = true; accepted.append("The rest is on screen."); break
             }
             count += sentence.count; accepted.append(sentence)
@@ -3331,6 +3332,7 @@ final class App: NSObject, WKScriptMessageHandler {
     var speechVoice: [String]?   // one voice per answer: a short sentence's language guess must not switch it
     func streamSpeech(_ text: String, final: Bool = false, preview: Bool = false) {
         guard (preview || Prefs.bool("speak")), !speechMuted, !speechSentences.capped, (preview || !(drawing.manual && drawing.request?.guide == drawQueued.guide)) else { return }
+        SpeechSentences.oneLine = Prefs.bool("shortReply")
         speechQueue += speechSentences.take(readAloudText(text), final: final)
         speakNext()
     }
@@ -3351,12 +3353,32 @@ final class App: NSObject, WKScriptMessageHandler {
         p.executableURL = URL(fileURLWithPath: "/usr/bin/say")
         let arguments = speechVoice.map { $0 + [words] } ?? readAloudArguments(words) { voiceQualityTip() }
         speechVoice = Array(arguments.dropLast()); p.arguments = arguments
+        kellyVoice(p, words)
         p.terminationHandler = { [weak self] _ in DispatchQueue.main.async {
             guard let self, self.voice === p else { return }
             self.voice = nil; self.speakNext()
             self.cueEnds = max(self.cueEnds, Date().addingTimeInterval(0.3)); self.hide(after: 2)
         } }
         do { try p.run(); voice = p } catch { telemetry(["error", "native", "speak"]); speakNext() }
+    }
+    // Kelly: speak in Kelly's ElevenLabs voice, sentence by sentence; `say` with the same arguments when the key, network or credits fail.
+    // Keychain service KnocturnDeck, accounts ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID. The key reaches curl on stdin, never in argv.
+    func kellyVoice(_ p: Process, _ words: String) {
+        guard let body = try? JSONSerialization.data(withJSONObject: ["text": words, "model_id": "eleven_flash_v2_5"]),
+              let json = String(data: body, encoding: .utf8) else { return }
+        let script = #"""
+            j=$1; shift
+            k=$(/usr/bin/security find-generic-password -s KnocturnDeck -a ELEVENLABS_API_KEY -w 2>/dev/null)
+            v=$(/usr/bin/security find-generic-password -s KnocturnDeck -a ELEVENLABS_VOICE_ID -w 2>/dev/null)
+            d=$(mktemp -d); f="$d/s.mp3"; trap 'rm -rf "$d"' TERM
+            if [ -n "$k" ] && [ -n "$v" ] && printf 'xi-api-key: %s\n' "$k" | /usr/bin/curl -fsS -m 8 -H @- -H 'Content-Type: application/json' -d "$j" -o "$f" "https://api.elevenlabs.io/v1/text-to-speech/$v?output_format=mp3_44100_64" 2>/dev/null; then
+                (sleep 300; rm -rf "$d") >/dev/null 2>&1 &
+                exec /usr/bin/afplay "$f"
+            fi
+            rm -rf "$d"; exec /usr/bin/say "$@"
+            """#
+        p.arguments = ["-c", script, "say", json] + (p.arguments ?? [])
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
     }
     func voiceQualityTip() {
         guard !UserDefaults.standard.bool(forKey: "voiceQualityTip") else { return }
@@ -4075,8 +4097,7 @@ final class App: NSObject, WKScriptMessageHandler {
             if text.isEmpty && offerText == nil && Date().timeIntervalSince(began) < 0.3 {
                 let typing = keysHeld; keysHeld = false   // hush hands held keys back; Type right away keeps them for the typing box
                 hush(); js("msg", "")
-                if typing { keysHeld = true; js("compose", true); return }
-                return hide(after: 3)
+                keysHeld = typing; js("compose", true); return   // Kelly: a tap opens the box to type, a hold talks
             }
             stop()
             return
@@ -5805,7 +5826,7 @@ final class RoutineWake {
 }
 
 // First-run window (ui/onboarding.html): welcome, the macOS permissions, the AI, one live try of the shortcut, then things to try.
-// Shows until finished once; to see it again: defaults delete com.atticus.app onboarded, then restart the app.
+// Shows until finished once; to see it again: defaults delete com.knocturnlabs.kelly onboarded, then restart the app.
 final class Onboarding: NSObject, WKScriptMessageHandler, NSWindowDelegate {
     var win: NSWindow?, web: WKWebView?, timer: Timer?
     var checkingPlan = false, setupShown = false
@@ -6534,8 +6555,8 @@ var leader: NSPanel?
 func relaunchSoon() {
     let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/sh")
     p.arguments = ProcessInfo.processInfo.environment["ATTICUS_DIR"] != nil ? ["-c", "sleep 1; exec \"$0\" -onboarded YES", CommandLine.arguments[0]] :
-                  ["-c", "sleep 1; launchctl bootout gui/\(getuid())/com.atticus.app >/dev/null 2>&1; sleep 1; launchctl bootstrap gui/\(getuid()) \"$1\" 2>/dev/null || open \"$0\"",
-                   Bundle.main.bundlePath, NSHomeDirectory() + "/Library/LaunchAgents/com.atticus.app.plist"]
+                  ["-c", "sleep 1; launchctl bootout gui/\(getuid())/com.knocturnlabs.kelly >/dev/null 2>&1; sleep 1; launchctl bootstrap gui/\(getuid()) \"$1\" 2>/dev/null || open \"$0\"",
+                   Bundle.main.bundlePath, NSHomeDirectory() + "/Library/LaunchAgents/com.knocturnlabs.kelly.plist"]
     try? p.run()
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { NSApp.terminate(nil) }
 }
@@ -7102,7 +7123,7 @@ final class SettingsWindow: NSObject, WKScriptMessageHandler, WKNavigationDelega
         if k == "login" {   // the LaunchAgent build.sh installed: enabled = starts at login
             if ProcessInfo.processInfo.environment["ATTICUS_DIR"] != nil { Prefs.set("login",false); push(); return }
             let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-            p.arguments = [v as? Bool == true ? "enable" : "disable", "gui/\(getuid())/com.atticus.app"]; try? p.run()
+            p.arguments = [v as? Bool == true ? "enable" : "disable", "gui/\(getuid())/com.knocturnlabs.kelly"]; try? p.run()
         }
     }
 
@@ -9790,7 +9811,7 @@ var stderrInfo = stat()
 if isatty(2) == 0, fstat(2, &stderrInfo) == 0, stderrInfo.st_mode & S_IFMT == S_IFCHR {
     freopen((Prefs.path as NSString).deletingLastPathComponent + "/app.err", "a", stderr)
 }
-NSLog("Launch: pid %d, %@", getpid(), ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "com.atticus.app" ? "by launchd" : "outside launchd")
+NSLog("Launch: pid %d, %@", getpid(), ProcessInfo.processInfo.environment["XPC_SERVICE_NAME"] == "com.knocturnlabs.kelly" ? "by launchd" : "outside launchd")
 
 let meeting = MeetingCopilot()
 
@@ -9977,7 +9998,7 @@ Updater.noteLaunch()
 Updater.schedule()
 telemetry(["crashes"])   // app crashes macOS saved since the last launch
 
-// Test hook: `defaults write com.atticus.app demo -string "<request>"` then restart runs it once without the mic.
+// Test hook: `defaults write com.knocturnlabs.kelly demo -string "<request>"` then restart runs it once without the mic.
 if let demo = UserDefaults.standard.string(forKey: "demo") {
     UserDefaults.standard.removeObject(forKey: "demo")
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { app.js("listen"); app.show(); app.js("words", demo); app.run(demo) }

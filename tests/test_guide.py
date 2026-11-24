@@ -261,9 +261,9 @@ class GuideTests(unittest.TestCase):
         retry.assert_not_called(); self.assertFalse(atticus.run.ok)
 
     def test_prompt_budget_against_base(self):
-        baseline = {'cheapest': 'c59b4f952d7f3dfe8e0b20341f4fa75be79299bcebfdfa09d412d75e845dcbcf',
-                    'balanced': '7587c7ad353b11d698f49e44e4e3afbb0ee923972d946bf6174cca2b9f25e90a'}
-        # the one charts line; the rest is the a3e1175 prompt with one same-length handoff phrase: "unwatched look-act loops" (Nov 18),
+        baseline = {'cheapest': '5561837f0980044e659eaa88397e644fdca0a323e244c4fff46e2a4183cefc8b',
+                    'balanced': 'db7df42f239794a8f29bddede193037612239a2a7b669225512496878ffc5b01'}
+        # Kelly fork: rehashed for "You are Kelly" (same length as Atticus). The one charts line; the rest is the a3e1175 prompt with one same-length handoff phrase: "unwatched look-act loops" (Nov 18),
         # and the helper path named once, its flags bare after it (Nov 20)
         graphs = next(l for l in atticus.SYSTEM.splitlines() if l.startswith('Graphs: ')) + '\n'
         for mode, model in [('cheapest','haiku'), ('balanced','haiku'), ('capable','sonnet')]:

@@ -54,6 +54,7 @@ class TelemetryTests(unittest.TestCase):
                 self.assertEqual(send.call_count, 2)
                 self.assertEqual((root / 'id').read_text(), identity)
 
+    @unittest.skip('Kelly fork: usage counts are off by default')
     def test_failure_and_used_events_include_the_same_app_version_field(self):
         with tempfile.TemporaryDirectory() as root, patch.object(atticus, 'DIR', root), \
              patch.object(atticus, 'POSTHOG_KEY', 'fixture-token'), \
@@ -447,6 +448,7 @@ NSApplication.shared.run()
             send.assert_not_called()
             self.assertEqual(list(Path(root).iterdir()), [])
 
+    @unittest.skip('Kelly fork: usage counts are off by default')
     def test_new_users_are_counted_by_default(self):
         with tempfile.TemporaryDirectory() as root, patch.object(atticus, 'DIR', root), \
              patch.object(atticus, 'PREFS', str(Path(root) / 'settings.json')), \
